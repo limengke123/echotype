@@ -96,13 +96,14 @@ export function PracticeView({ sentences, settings, onFinish, onExit, onOpenSett
           break;
         }
         case "Tab": {
+          // Tab replays the sentence: hands stay on the keyboard while typing.
           event.preventDefault();
-          if (api.phase === "answering") api.revealHint();
+          replay();
           break;
         }
         case "ArrowUp": {
           event.preventDefault();
-          replay();
+          if (api.phase === "answering") api.revealHint();
           break;
         }
         case "Escape": {
@@ -239,8 +240,8 @@ export function PracticeView({ sentences, settings, onFinish, onExit, onOpenSett
           <div className="answer-actions">
             <span className="keyboard-hints">
               <kbd>Enter</kbd> 提交
-              <kbd>Tab</kbd> 提示
-              <kbd>↑</kbd> 重听
+              <kbd>Tab</kbd> 重听
+              <kbd>↑</kbd> 提示
             </span>
             <button
               type="button"
@@ -269,7 +270,7 @@ export function PracticeView({ sentences, settings, onFinish, onExit, onOpenSett
 
       <div className="practice-foot">
         <IconSpeaker size={14} />
-        <span>点圆形按钮、按 ↑ 或空格（未输入时）都可以重听</span>
+        <span>点圆形按钮、按 Tab 或空格（未输入时）都可以重听</span>
       </div>
     </div>
   );
