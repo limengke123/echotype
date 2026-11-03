@@ -19,6 +19,24 @@ npm run dev        # http://127.0.0.1:5173
 
 > 浏览器建议用 Chrome / Edge / Safari。Firefox 的 `speechSynthesis` 声音质量较差。
 
+## 在线版
+
+<https://limengke123.github.io/echotype/>
+
+由 `.github/workflows/deploy.yml` 自动发布：push 到 `main` → 跑测试 → 构建（base 为 `/echotype/`）→ 部署到 GitHub Pages。
+
+> 仓库首次发布需要在 **Settings → Pages → Build and deployment → Source** 里选 **GitHub Actions**，
+> 之后每次 push 都会自动更新。
+
+线上版没有 Vite 那个 `/llm` 代理，AI 生成会直连本机 `127.0.0.1:11434`，所以要让 Ollama 放行站点来源：
+
+```bash
+OLLAMA_ORIGINS=https://limengke123.github.io ollama serve
+```
+
+如果浏览器仍然拦下（部分版本的私有网络策略会阻止 HTTPS 页面访问本机端口），
+用本地 `npm run dev` 打开即可——本地走内置代理，最稳。
+
 ## 功能
 
 **输入端**
