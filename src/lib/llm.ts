@@ -93,7 +93,32 @@ type StreamOptions = {
   onDelta?: (delta: string) => void;
 };
 
-type StreamResult = { text: string; reasoning: number };
+type StreamResult = { text: string; reasoning: string };
+
+/**
+ * Some models (notably MLX builds served through Ollama's OpenAI-compatible
+ * endpoint) stream their real answer into the `reasoning` channel and leave
+ * `content` empty. That text is perfectly usable, but a genuine chain of
+ * thought is not — so we only accept it when it does not read like planning.
+ */
+const COT_PATTERNS = [
+  /\b(task|analysis|thinking process|reasoning)\s*:/,
+  /\b(let me (think|analy[sz]e|consider|plan|draft|write|break|check|count|structure))/,
+  /\bthe user (wants|asked|is asking|needs)/,
+  /\b(here(?:'s| is| are)|below are|the following) (the |your |a |some )?(sentences|lines|examples)/,
+  /^\s*step 1\b/,
+];
+
+/**
+ * Some models (notably MLX builds served through Ollama's OpenAI-compatible
+ * endpoint) stream their real answer into the `reasoning` channel and leave
+ * `content` empty. That text is perfectly usable, but a genuine chain of
+ * thought is not — so we only accept it when it does not read like planning.
+ */
+export function looksLikeChainOfThought(text: string): boolean {
+  const head = text.slice(0, 240).toLowerCase();
+  return COT_PATTERNS.some((pattern) => pattern.test(head));
+}
 
 async function readStream(response: Response, onDelta?: (delta: string) => void): Promise<StreamResult> {
   const contentType = response.headers.get("content-type") ?? "";
@@ -107,7 +132,7 @@ async function readStream(response: Response, onDelta?: (delta: string) => void)
     };
     const message = json.choices?.[0]?.message;
     const text = message?.content ?? json.choices?.[0]?.text ?? "";
-    const reasoning = (message?.reasoning ?? message?.reasoning_content ?? "").length;
+    const reasoning = message?.reasoning ?? message?.reasoning_content ?? "";
     if (text) onDelta?.(text);
     return { text, reasoning };
   }
@@ -116,7 +141,7 @@ async function readStream(response: Response, onDelta?: (delta: string) => void)
   const decoder = new TextDecoder();
   let buffer = "";
   let full = "";
-  let reasoning = 0;
+  let reasoningText = "";
 
   for (;;) {
     const { value, done } = await reader.read();
@@ -144,8 +169,8 @@ async function readStream(response: Response, onDelta?: (delta: string) => void)
           full += content;
           onDelta?.(content);
         } else {
-          // Thinking models stream the chain of thought into a separate field.
-          reasoning += (delta?.reasoning ?? delta?.reasoning_content ?? "").length;
+          // Thinking models stream their output into a separate field.
+          reasoningText += delta?.reasoning ?? delta?.reasoning_content ?? "";
         }
       } catch {
         /* a partial JSON line: ignore, the next chunk will complete it */
@@ -153,7 +178,7 @@ async function readStream(response: Response, onDelta?: (delta: string) => void)
     }
   }
 
-  return { text: full, reasoning };
+  return { text: full, reasoning: reasoningText };
 }
 
 /** Streams a chat completion, returning the full text. */
@@ -186,11 +211,20 @@ export async function streamChat({ config, messages, signal, onDelta }: StreamOp
       }
 
       const result = await readStream(response, onDelta);
-      if (!result.text.trim() && result.reasoning > 0) {
-        // Do not retry the fallback URL: the model itself is the problem.
-        throw fatalError(REASONING_ONLY_MESSAGE);
+      if (result.text.trim()) return result.text;
+
+      // Some models (Ollama + MLX builds, for instance) stream the real answer
+      // into `reasoning` and leave `content` empty. Use it when it is actual
+      // material rather than planning text.
+      const reasoning = result.reasoning.trim();
+      if (reasoning && !looksLikeChainOfThought(reasoning)) {
+        onDelta?.(reasoning);
+        return reasoning;
       }
-      return result.text;
+
+      // Do not retry the fallback URL: the model itself is the problem.
+      if (reasoning) throw fatalError(REASONING_ONLY_MESSAGE);
+      return "";
     } catch (error) {
       if (signal?.aborted) throw error;
       if ((error as { fatal?: boolean }).fatal) throw error;

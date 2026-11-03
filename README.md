@@ -49,7 +49,7 @@ OLLAMA_ORIGINS=https://limengke123.github.io ollama serve
 **练习端**
 
 - 逐句朗读，圆形按钮 / `↑` / 空格重听，显示已听次数
-- 实时语速调节（0.6×–1.2×）、音色选择、试听
+- 实时语速调节（0.6×–1.2×）；音色只列 Chrome 自带的 Google 英文音色，默认 Google 美音，可试听
 - 打字提交后做**词级 diff + 字符级高亮**：漏掉的词、多打的词、拼错的字母分别标出来
 - 三档判定：宽松（忽略大小写和标点）/ 标准 / 严格
 - 答对自动进入下一句；答错可以重听、重练
@@ -110,9 +110,17 @@ ECHOTYPE_OLLAMA_URL=http://127.0.0.1:11434 npm run dev
 | 现象 | 原因 / 处理 |
 | --- | --- |
 | `本地 Ollama（127.0.0.1:11434）没有响应` | 服务没起，先 `ollama serve` |
-| `这个模型只输出了「思考过程」，没有正文` | 用的推理型模型（qwen3、deepseek-r1 等）或 Ollama 跑不动的 MLX 模型。换 `qwen2.5:7b`、`llama3.1:8b` 这类普通指令模型 |
+| `这个模型只输出了「思考过程」，没有正文` | 模型把正文写进了 `reasoning` 且内容像思考笔记。换 `qwen2.5:7b`、`llama3.1:8b` 这类普通指令模型 |
 | `404` | Base URL 填错。Ollama 走内置代理时留空；LM Studio 形如 `http://127.0.0.1:1234/v1` |
 | 模型名报错 | 点设置里的「检测」看看本机到底装了哪些 |
+
+### 关于 `reasoning` 通道
+
+有些模型（Ollama 里的 MLX 模型很典型）会把正文写进 `reasoning` 字段、把 `content` 留空。
+App 会把这段文本直接当作结果用——只要它不像「思考笔记」（`Let me think…`、`Here are the sentences…`、
+`Task:` 之类）。真的只吐思考过程时才会报错。
+
+生成期间按钮上会显示已等待的秒数，这类模型通常要等整段生成完才一次性出现。
 
 ## 判定规则
 
@@ -165,6 +173,7 @@ npm run test:core  # 逻辑层自测（切分 / 判定 / diff / 统计）
 
 ## 已知限制
 
-- 语音来自系统 TTS，不同机器的音色差别很大；macOS 的 "Samantha"、Windows 的 "Aria" 比较自然。
+- 语音只用 Chrome 自带的 Google 英文音色（`Google US English`、`Google UK English Female/Male`），
+  它们走网络合成，断网时会退回系统默认发音。其他浏览器可能一个 Google 音色都没有。
 - 一个句子对应一次听写。超过 190 字符的长句会在分号/逗号处再切一刀。
 - `speechSynthesis` 需要用户先有一次交互，页面里点「开始练习」即满足要求。

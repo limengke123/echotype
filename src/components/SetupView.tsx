@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CefrLevel, Session, Settings } from "../lib/types";
 import { countWords, estimateMinutes, splitSentences, titleFromText } from "../lib/splitter";
 import { LEVELS, TOPICS, buildMessages, sentencesFromLlm } from "../lib/prompts";
@@ -26,6 +26,19 @@ export function SetupView({ settings, sessions, onStart, onOpenSettings }: Props
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [generated, setGenerated] = useState(false);
+
+  // Reasoning-style models only send their text at the very end, so show a
+  // ticking counter instead of a silent "生成中…".
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!generating) return;
+    const started = Date.now();
+    setElapsed(0);
+    const timer = window.setInterval(() => {
+      setElapsed(Math.round((Date.now() - started) / 1000));
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [generating]);
 
   const sentences = useMemo(() => splitSentences(raw), [raw]);
   const words = useMemo(() => countWords(sentences), [sentences]);
@@ -193,7 +206,7 @@ export function SetupView({ settings, sessions, onStart, onOpenSettings }: Props
 
               <button type="button" className="btn btn-accent" onClick={generate} disabled={generating}>
                 <IconSparkles size={16} />
-                {generating ? "生成中…" : "生成文本"}
+                {generating ? `生成中… ${elapsed}s` : "生成文本"}
               </button>
             </div>
           </div>

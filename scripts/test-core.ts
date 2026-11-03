@@ -8,6 +8,7 @@ import { buildHint, isCorrect, normalizeAnswer } from "../src/lib/grading.ts";
 import { diffWords, summariseDiff } from "../src/lib/diff.ts";
 import { buildMessages, sentencesFromLlm } from "../src/lib/prompts.ts";
 import { computeStats, formatDuration } from "../src/lib/stats.ts";
+import { looksLikeChainOfThought } from "../src/lib/llm.ts";
 
 let passed = 0;
 let failed = 0;
@@ -158,6 +159,34 @@ check("average plays", stats.avgPlays, 1.7);
 check("collects the wrong sentence once", stats.wrong.length, 1);
 check("formats duration", formatDuration(12_000), "12 秒");
 check("formats long duration", formatDuration(95_000), "1 分 35 秒");
+
+/* ---------------- reasoning channel ---------------- */
+
+const materialFromReasoning =
+  "I walk to the park every morning for exercise.\n" +
+  "She likes to read books in her cozy living room.\n" +
+  "We should go to the cinema this weekend.";
+
+ok(
+  "plain material in the reasoning channel is accepted",
+  looksLikeChainOfThought(materialFromReasoning) === false,
+  materialFromReasoning,
+);
+
+ok(
+  "a chain of thought is rejected",
+  looksLikeChainOfThought("Let me think about this. The user wants eight short sentences for dictation."),
+);
+
+ok(
+  "a planning preamble is rejected",
+  looksLikeChainOfThought("Here are the sentences you asked for:\n1. First one.\n2. Second one."),
+);
+
+ok(
+  "material starting with an ordinary verb is accepted",
+  looksLikeChainOfThought("Let me explain the rules to the new players at the club.") === false,
+);
 
 /* ---------------- misc ---------------- */
 

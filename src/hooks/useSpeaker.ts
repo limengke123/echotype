@@ -7,6 +7,31 @@ export function clampRate(rate: number): number {
   return Math.min(MAX_RATE, Math.max(MIN_RATE, Math.round(rate * 10) / 10));
 }
 
+/** Chrome ships a handful of "Google ..." voices; those are the only ones we offer. */
+export function isGoogleVoice(voice: SpeechSynthesisVoice): boolean {
+  return /google/i.test(voice.name) && voice.lang.toLowerCase().startsWith("en");
+}
+
+/**
+ * Resolves the voice to speak with. An explicit `voiceURI` wins; otherwise we
+ * default to Google's US English voice, then any Google voice.
+ */
+export function pickVoice(
+  voices: SpeechSynthesisVoice[],
+  voiceURI: string,
+): SpeechSynthesisVoice | undefined {
+  if (voiceURI) {
+    const exact = voices.find((voice) => voice.voiceURI === voiceURI);
+    if (exact) return exact;
+  }
+
+  return (
+    voices.find((voice) => /^google us english$/i.test(voice.name)) ??
+    voices.find((voice) => /google/i.test(voice.name) && /^en[-_]us$/i.test(voice.lang)) ??
+    voices[0]
+  );
+}
+
 type SpeakOptions = {
   rate: number;
   voiceURI: string;
@@ -32,11 +57,11 @@ export function useSpeaker() {
     const synth = window.speechSynthesis;
 
     const load = () => {
-      const english = synth.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith("en"));
+      const google = synth.getVoices().filter(isGoogleVoice);
       setVoices((prev) =>
-        prev.length === english.length && prev.every((v, i) => v.voiceURI === english[i].voiceURI)
+        prev.length === google.length && prev.every((v, i) => v.voiceURI === google[i].voiceURI)
           ? prev
-          : english,
+          : google,
       );
     };
 
@@ -89,7 +114,7 @@ export function useSpeaker() {
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        const voice = voices.find((item) => item.voiceURI === options.voiceURI);
+        const voice = pickVoice(voices, options.voiceURI);
         if (voice) {
           utterance.voice = voice;
           utterance.lang = voice.lang;

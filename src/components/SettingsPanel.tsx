@@ -26,6 +26,11 @@ export function SettingsPanel({
   onClearHistory,
 }: Props) {
   const speaker = useSpeaker();
+  // A previously saved voice may no longer be offered (non-Google voices are
+  // filtered out), so fall back to the default entry instead of showing blank.
+  const selectedVoice = speaker.voices.some((voice) => voice.voiceURI === settings.voiceURI)
+    ? settings.voiceURI
+    : "";
   const [models, setModels] = useState<string[]>([]);
   const [probing, setProbing] = useState(false);
   const [probeError, setProbeError] = useState<string | null>(null);
@@ -72,18 +77,23 @@ export function SettingsPanel({
         <div className="settings-body">
           <section className="settings-group">
             <h3>朗读</h3>
+            {speaker.voices.length === 0 && (
+              <p className="settings-note">
+                还没检测到 Google 音色。它们由 Chrome 提供、需要联网加载，稍等几秒或换用 Chrome / Edge。
+              </p>
+            )}
 
             <div className="settings-row">
               <div className="settings-label">
                 <span>音色</span>
-                <span className="settings-hint">只用系统里的英文语音</span>
+                <span className="settings-hint">只用 Chrome 自带的 Google 英文音色</span>
               </div>
               <div className="settings-control">
                 <select
-                  value={settings.voiceURI}
+                  value={selectedVoice}
                   onChange={(event) => onChange({ voiceURI: event.target.value })}
                 >
-                  <option value="">系统默认</option>
+                  <option value="">Google 美音（默认）</option>
                   {speaker.voices.map((voice) => (
                     <option key={voice.voiceURI} value={voice.voiceURI}>
                       {voice.name} ({voice.lang})
