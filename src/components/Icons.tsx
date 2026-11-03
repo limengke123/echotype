@@ -123,3 +123,45 @@ export function IconWave({ size = 28, className = "" }: IconProps) {
     </svg>
   );
 }
+
+export function IconHistory({ size = 18, className = "" }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path
+        d="M12 7v5l3.2 2M20.5 12a8.5 8.5 0 1 1-2.6-6.1M20.5 4.5V9H16"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function IconTrash({ size = 16, className = "" }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path
+        d="M4.5 7h15M9.5 7V5.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7M6.5 7l.8 12a1 1 0 0 0 1 .9h7.4a1 1 0 0 0 1-.9l.8-12"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function IconArrowLeft({ size = 18, className = "" }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path
+        d="M15 5l-7 7 7 7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

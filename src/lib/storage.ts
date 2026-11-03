@@ -64,6 +64,12 @@ export function saveSession(session: Session): Session[] {
   return sessions;
 }
 
+export function deleteSession(id: string): Session[] {
+  const remaining = loadSessions().filter((session) => session.id !== id);
+  writeJson(SESSIONS_KEY, remaining);
+  return remaining;
+}
+
 export function clearSessions(): void {
   writeJson(SESSIONS_KEY, []);
 }

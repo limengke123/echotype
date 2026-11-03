@@ -1,21 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CefrLevel, Session, Settings } from "../lib/types";
+import type { CefrLevel, Settings } from "../lib/types";
 import { countWords, estimateMinutes, splitSentences, titleFromText } from "../lib/splitter";
 import { LEVELS, TOPICS, buildMessages, sentencesFromLlm } from "../lib/prompts";
 import { LOCAL_TARGET_LABEL, streamChat } from "../lib/llm";
-import { formatDate, statsForSession } from "../lib/stats";
 import { IconSparkles } from "./Icons";
 
 const SAMPLE_TEXT = `The first time I tried to cook for my roommates, I burned the rice so badly that the smoke alarm went off. Everyone stood in the hallway laughing while I waved a towel at the ceiling. I wanted to disappear, but by the end of the night we were eating takeout on the floor and telling stories about our worst kitchen disasters. It turned out that nobody remembered the failed dinner. They only remembered how hard we laughed.`;
 
 type Props = {
   settings: Settings;
-  sessions: Session[];
   onStart: (sentences: string[], title: string, source: "paste" | "llm") => void;
   onOpenSettings: () => void;
 };
 
-export function SetupView({ settings, sessions, onStart, onOpenSettings }: Props) {
+export function SetupView({ settings, onStart, onOpenSettings }: Props) {
   const [mode, setMode] = useState<"paste" | "llm">("paste");
   const [raw, setRaw] = useState("");
   const [topic, setTopic] = useState("日常对话");
@@ -26,6 +24,9 @@ export function SetupView({ settings, sessions, onStart, onOpenSettings }: Props
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [generated, setGenerated] = useState(false);
+  // The generated passage stays hidden until the user asks to see it — the
+  // whole point is to hear it, not to read it beforehand.
+  const [showText, setShowText] = useState(false);
 
   // Reasoning-style models only send their text at the very end, so show a
   // ticking counter instead of a silent "生成中…".
@@ -40,6 +41,7 @@ export function SetupView({ settings, sessions, onStart, onOpenSettings }: Props
     return () => window.clearInterval(timer);
   }, [generating]);
 
+  const textVisible = mode === "paste" || showText || !generated;
   const sentences = useMemo(() => splitSentences(raw), [raw]);
   const words = useMemo(() => countWords(sentences), [sentences]);
   const minutes = useMemo(() => estimateMinutes(sentences), [sentences]);
@@ -54,6 +56,7 @@ export function SetupView({ settings, sessions, onStart, onOpenSettings }: Props
     setError(null);
     setRaw("");
     setGenerated(false);
+    setShowText(false);
 
     let accumulated = "";
     try {
@@ -212,25 +215,60 @@ export function SetupView({ settings, sessions, onStart, onOpenSettings }: Props
           </div>
         )}
 
-        <textarea
-          className="text-input"
-          value={raw}
-          onChange={(event) => {
-            setRaw(event.target.value);
-            setGenerated(false);
-          }}
-          placeholder={
-            mode === "llm"
-              ? "点「生成文本」让本地模型出题，生成后可以在这里直接修改…"
-              : "把一段英文贴进来。可以是文章、台词、播客转写稿，程序会自动拆成一句一句。"
-          }
-          spellCheck={false}
-        />
+        {mode === "llm" && generating ? (
+          <div className="writing-panel">
+            <div className="writing-dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </div>
+            <div className="writing-copy">
+              <strong>模型正在写…</strong>
+              <span className="muted">
+                已收到 {raw.length} 字 · 约 {sentences.length} 句 · {elapsed}s
+              </span>
+            </div>
+          </div>
+        ) : textVisible ? (
+          <textarea
+            className="text-input"
+            value={raw}
+            onChange={(event) => {
+              setRaw(event.target.value);
+              setGenerated(false);
+            }}
+            placeholder={
+              mode === "llm"
+                ? "点「生成文本」让本地模型写一篇短文，生成后可以在这里直接修改…"
+                : "把一段英文贴进来。可以是文章、台词、播客转写稿，程序会自动拆成一句一句。"
+            }
+            spellCheck={false}
+          />
+        ) : (
+          <div className="generated-card">
+            <div className="generated-lead">
+              <span className="generated-badge">已生成</span>
+              <span className="generated-stats">
+                {sentences.length} 句 · {words} 词 · 约 {minutes} 分钟
+              </span>
+            </div>
+            <p className="generated-hint">
+              内容先藏起来，直接开始练就行——听完再看才有意思。想先过一眼或改几处，点右边。
+            </p>
+            <button type="button" className="btn btn-sm" onClick={() => setShowText(true)}>
+              查看并编辑
+            </button>
+          </div>
+        )}
 
         <div className="card-foot">
-          <span className="stats-line">
-            {sentences.length} 句 · {words} 词 · 约 {minutes} 分钟
-          </span>
+          {textVisible ? (
+            <span className="stats-line">
+              {sentences.length} 句 · {words} 词 · 约 {minutes} 分钟
+            </span>
+          ) : (
+            <span className="stats-line muted">内容已隐藏</span>
+          )}
 
           <span className="spacer" />
 
@@ -270,25 +308,6 @@ export function SetupView({ settings, sessions, onStart, onOpenSettings }: Props
         {sentences.length > 0 && <span className="btn-sub">· {sentences.length} 句</span>}
       </button>
 
-      {sessions.length > 0 && (
-        <section className="history">
-          <h2>最近练习</h2>
-          <ul>
-            {sessions.slice(0, 5).map((session) => {
-              const stats = statsForSession(session);
-              return (
-                <li key={session.id}>
-                  <span className="history-title">{session.title}</span>
-                  <span className="history-meta">
-                    {session.sentences.length} 句 · 一次听对 {stats.firstAccuracy}% ·{" "}
-                    {formatDate(session.startedAt)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
     </div>
   );
 }

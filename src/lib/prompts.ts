@@ -26,24 +26,25 @@ export type GenerationOptions = {
   targetWords: string;
 };
 
-const SYSTEM_PROMPT = `You write English listening-practice material for a dictation app.
-The learner hears one line at a time and types it back, so readability by a text-to-speech voice matters more than literary style.
+const SYSTEM_PROMPT = `You write a SHORT, CONNECTED English passage for a dictation app.
+The learner hears one sentence at a time and types it back, so the passage has to read like one piece of writing, not a random list.
 
 Hard rules:
-- Output ONLY the sentences, one per line. Nothing else.
-- Every line is one complete sentence ending with a period, question mark or exclamation mark.
+- Write ONE short continuous passage: a mini story, a scene, a short personal account, or a small explanation. Never a pile of unrelated sentences.
+- Every sentence must connect to the ones around it. Keep one topic, one setting and the same people. Use linking words such as "but", "because", "so", "then", "after that", "however".
+- Output ONLY the sentences, one per line, in reading order. Nothing else.
 - No numbering, no bullets, no markdown, no quotation marks wrapping the lines, no title, no explanation.
 - 8 to 20 words per sentence.
 - Natural, spoken-sounding English. Contractions are welcome.
 - Avoid abbreviations (Mr., e.g., U.S.), symbols, emoji and digits with units — they sound wrong when read aloud.
 - Use common, everyday vocabulary unless the level asks otherwise.
-- Do not repeat the same sentence structure over and over.`;
+- The first sentence sets the scene; the last one closes the thought.`;
 
 export function buildMessages(options: GenerationOptions): ChatMessage[] {
   const lines = [
     `Topic: ${options.topic || "everyday life"}`,
     `Learner level: CEFR ${options.level}`,
-    `Write exactly ${options.sentenceCount} sentences.`,
+    `Write one connected passage of exactly ${options.sentenceCount} sentences, one per line.`,
   ];
 
   if (options.targetWords.trim()) {

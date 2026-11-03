@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import type { Attempt, Script, Session } from "./lib/types";
 import { useSettings } from "./hooks/useSettings";
-import { clearSessions, loadSessions, saveSession } from "./lib/storage";
+import { clearSessions, deleteSession, loadSessions, saveSession } from "./lib/storage";
 import { statsForSession } from "./lib/stats";
 import { SetupView } from "./components/SetupView";
 import { PracticeView } from "./components/PracticeView";
 import { StatsView } from "./components/StatsView";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { IconGear, IconWave } from "./components/Icons";
+import { HistoryView } from "./components/HistoryView";
+import { IconGear, IconHistory, IconWave } from "./components/Icons";
 
-type Screen = "setup" | "practice" | "stats";
+type Screen = "setup" | "practice" | "stats" | "history";
 
 function newId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -89,21 +90,30 @@ export default function App() {
           <span className="brand-tag">英文听写</span>
         </div>
 
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={() => setSettingsOpen(true)}
-          aria-label="打开设置"
-        >
-          <IconGear size={18} />
-        </button>
+        <div className="topbar-actions">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setScreen(screen === "history" ? "setup" : "history")}
+          >
+            <IconHistory size={15} />
+            历史
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="打开设置"
+          >
+            <IconGear size={18} />
+          </button>
+        </div>
       </header>
 
       <main className="main">
         {screen === "setup" && (
           <SetupView
             settings={settings}
-            sessions={sessions}
             onStart={startPractice}
             onOpenSettings={() => setSettingsOpen(true)}
           />
@@ -117,6 +127,15 @@ export default function App() {
             onFinish={finishPractice}
             onExit={exitPractice}
             onOpenSettings={() => setSettingsOpen(true)}
+          />
+        )}
+
+        {screen === "history" && (
+          <HistoryView
+            sessions={sessions}
+            onPractice={startPractice}
+            onDelete={(id) => setSessions(deleteSession(id))}
+            onBack={() => setScreen("setup")}
           />
         )}
 

@@ -5,6 +5,7 @@ import { buildHint } from "../lib/grading";
 import { useSpeaker } from "../hooks/useSpeaker";
 import { useDictation } from "../hooks/useDictation";
 import { ReviewPanel } from "./ReviewPanel";
+import { TypeArea } from "./TypeArea";
 import { IconPlay, IconSpeaker } from "./Icons";
 
 type Props = {
@@ -141,7 +142,15 @@ export function PracticeView({ sentences, settings, onFinish, onExit, onOpenSett
   }
 
   return (
-    <div className="screen practice-screen">
+    <div
+      className="screen practice-screen"
+      onClick={(event) => {
+        if (phase !== "answering") return;
+        const target = event.target as HTMLElement;
+        if (target.closest("button, a, input, select, textarea")) return;
+        inputRef.current?.focus({ preventScroll: true });
+      }}
+    >
       <div className="practice-head">
         <button type="button" className="btn btn-ghost" onClick={onExit}>
           退出
@@ -174,6 +183,7 @@ export function PracticeView({ sentences, settings, onFinish, onExit, onOpenSett
         <button
           type="button"
           className={`play-button ${speaker.speaking ? "is-speaking" : ""}`}
+          onMouseDown={(event) => event.preventDefault()}
           onClick={replay}
           aria-label="重听这一句"
         >
@@ -219,16 +229,11 @@ export function PracticeView({ sentences, settings, onFinish, onExit, onOpenSett
 
       {phase === "answering" ? (
         <div className="answer">
-          <input
-            ref={inputRef}
-            className="answer-input"
+          <TypeArea
             value={input}
-            onChange={(event) => dictation.setInput(event.target.value)}
+            onChange={dictation.setInput}
+            inputRef={inputRef}
             placeholder="听到什么就写什么…"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
           />
 
           <div className="answer-actions">
