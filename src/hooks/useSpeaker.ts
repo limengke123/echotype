@@ -40,42 +40,71 @@ type SpeakOptions = {
 /**
  * Thin wrapper over the Web Speech API.
  *
- * Two browser quirks are handled here:
- *  - `getVoices()` is empty on first load in Chrome, so we listen for
- *    `voiceschanged` (plus a short poll as a safety net).
+ * Browser quirks handled here:
+ *  - `getVoices()` is empty on the first tick in Chrome. Speaking before the
+ *    list arrives makes the first utterance fall back to the system voice,
+ *    which sounds nothing like the Google one — so we hold `speak()` until the
+ *    voices (or a short timeout) are in.
  *  - Calling `speak()` in the same tick as `cancel()` can silently drop the
  *    utterance, so we defer by a frame.
  */
 export function useSpeaker() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [speaking, setSpeaking] = useState(false);
+  const [ready, setReady] = useState(false);
   const supported = typeof window !== "undefined" && "speechSynthesis" in window;
+
   const tokenRef = useRef(0);
+  // `speak()` reads voices through a ref so a callback captured before the
+  // list arrived still picks the Google voice later.
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const readyRef = useRef(false);
+  const waitersRef = useRef<(() => void)[]>([]);
+  const warmedRef = useRef(false);
+
+  const markReady = useCallback(() => {
+    readyRef.current = true;
+    setReady(true);
+    const waiters = waitersRef.current;
+    waitersRef.current = [];
+    for (const resolve of waiters) resolve();
+  }, []);
 
   useEffect(() => {
-    if (!supported) return;
-    const synth = window.speechSynthesis;
+    if (!supported) {
+      markReady();
+      return;
+    }
 
+    const synth = window.speechSynthesis;
     const load = () => {
       const google = synth.getVoices().filter(isGoogleVoice);
-      setVoices((prev) =>
-        prev.length === google.length && prev.every((v, i) => v.voiceURI === google[i].voiceURI)
-          ? prev
-          : google,
-      );
+      const changed =
+        google.length !== voicesRef.current.length ||
+        !google.every((voice, index) => voice.voiceURI === voicesRef.current[index]?.voiceURI);
+
+      if (changed) {
+        voicesRef.current = google;
+        setVoices(google);
+      }
+      if (google.length > 0) markReady();
     };
 
     load();
     synth.addEventListener("voiceschanged", load);
-    const poll = window.setInterval(load, 400);
-    const stopPoll = window.setTimeout(() => window.clearInterval(poll), 5000);
+
+    const poll = window.setInterval(load, 250);
+    // Do not hang the first sentence forever on a browser without Google voices.
+    const giveUp = window.setTimeout(markReady, 1500);
+    const stopPoll = window.setTimeout(() => window.clearInterval(poll), 6000);
 
     return () => {
       synth.removeEventListener("voiceschanged", load);
       window.clearInterval(poll);
+      window.clearTimeout(giveUp);
       window.clearTimeout(stopPoll);
     };
-  }, [supported]);
+  }, [supported, markReady]);
 
   useEffect(() => {
     return () => {
@@ -89,9 +118,65 @@ export function useSpeaker() {
     setSpeaking(false);
   }, [supported]);
 
+  /** Polls briefly for voices that show up right after the first speak starts. */
+  const waitForVoices = useCallback(async (timeoutMs: number) => {
+    if (voicesRef.current.length > 0) return;
+    await new Promise<void>((resolve) => {
+      const startedAt = Date.now();
+      const timer = window.setInterval(() => {
+        if (voicesRef.current.length > 0 || Date.now() - startedAt > timeoutMs) {
+          window.clearInterval(timer);
+          resolve();
+        }
+      }, 80);
+    });
+  }, []);
+
+  /**
+   * Chrome's Google voices are synthesised remotely. The very first utterance
+   * pays for connecting to that service and often comes out clipped or odd,
+   * which is exactly the "first listen sounds weird, replays are fine"
+   * symptom. Speaking a silent throwaway line once per page warms it up.
+   */
+  const warmUp = useCallback(async (voiceURI: string) => {
+    if (warmedRef.current || !supported) return;
+    warmedRef.current = true;
+
+    const synth = window.speechSynthesis;
+    const voice = pickVoice(voicesRef.current, voiceURI);
+    if (!voice) return;
+
+    const utterance = new SpeechSynthesisUtterance("Okay.");
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
+    utterance.rate = 1.2;
+    utterance.volume = 0;
+
+    try {
+      synth.speak(utterance);
+    } catch {
+      return;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 260));
+    synth.cancel();
+  }, [supported]);
+
   const speak = useCallback(
-    (text: string, options: SpeakOptions): Promise<void> => {
-      if (!supported || !text.trim()) return Promise.resolve();
+    async (text: string, options: SpeakOptions): Promise<void> => {
+      if (!supported || !text.trim()) return;
+
+      // Wait for the voice list: the very first utterance must not fall back to
+      // the system voice, or it sounds completely different from the replays.
+      if (!readyRef.current) {
+        await new Promise<void>((resolve) => waitersRef.current.push(resolve));
+      }
+
+      // The very first play may still race an empty voice list; give it a
+      // short, one-off grace period before falling back to the system voice.
+      if (!warmedRef.current) await waitForVoices(600);
+
+      await warmUp(options.voiceURI);
 
       const synth = window.speechSynthesis;
       synth.cancel();
@@ -100,7 +185,7 @@ export function useSpeaker() {
       tokenRef.current = token;
       setSpeaking(true);
 
-      return new Promise<void>((resolve) => {
+      await new Promise<void>((resolve) => {
         let settled = false;
         const finish = () => {
           if (settled) return;
@@ -114,7 +199,7 @@ export function useSpeaker() {
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        const voice = pickVoice(voices, options.voiceURI);
+        const voice = pickVoice(voicesRef.current, options.voiceURI);
         if (voice) {
           utterance.voice = voice;
           utterance.lang = voice.lang;
@@ -139,10 +224,10 @@ export function useSpeaker() {
         }, 40);
       });
     },
-    [supported, voices],
+    [supported, warmUp, waitForVoices],
   );
 
-  return { supported, voices, speaking, speak, stop };
+  return { supported, voices, speaking, ready, speak, stop };
 }
 
 export type Speaker = ReturnType<typeof useSpeaker>;
