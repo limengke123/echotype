@@ -38,13 +38,11 @@ export function TypeArea({ value, onChange, inputRef, placeholder, disabled }: P
 
   letters.forEach((letter, index) => {
     if (index === caret) nodes.push(<span key={`caret-${index}`} className="caret" aria-hidden="true" />);
+    // A plain inline span keeps normal text flow (words wrap at spaces, not
+    // between letters) — that is what typing surfaces in this genre look like.
     nodes.push(
-      <span
-        key={index}
-        className={letter === " " ? "letter is-space" : "letter"}
-        aria-hidden="true"
-      >
-        {letter === " " ? "" : letter}
+      <span key={index} className="ch" aria-hidden="true">
+        {letter}
       </span>,
     );
   });
