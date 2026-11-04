@@ -1,75 +1,76 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 type Props = {
   value: string;
   onChange: (value: string) => void;
-  inputRef: RefObject<HTMLInputElement | null>;
+  inputRef: RefObject<HTMLTextAreaElement | null>;
   placeholder: string;
+  onSubmit?: () => void;
   disabled?: boolean;
 };
 
 /**
  * The typing surface for a dictated sentence.
  *
- * A real (but invisible) `<input>` owns the state, the caret and the IME, while
- * the visible layer draws every typed letter as a tile. Clicking anywhere puts
- * the caret at the end — that is what a dictation flow needs, and it keeps the
- * invisible input's layout from disagreeing with the tiles.
+ * This is a real `<textarea>` — native caret placement, selection, IME and
+ * undo all behave the way people expect. It auto-grows instead of scrolling,
+ * so a long sentence wraps onto the next line without a scrollbar.
  */
-export function TypeArea({ value, onChange, inputRef, placeholder, disabled }: Props) {
-  const [caret, setCaret] = useState(value.length);
+export function TypeArea({ value, onChange, inputRef, placeholder, onSubmit, disabled }: Props) {
   const [focused, setFocused] = useState(false);
+  const innerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const assignRef = useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      innerRef.current = node;
+      inputRef.current = node;
+    },
+    [inputRef],
+  );
+
+  const resize = useCallback(() => {
+    const element = innerRef.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  }, []);
+
+  useLayoutEffect(() => {
+    resize();
+  }, [value, resize]);
 
   useEffect(() => {
-    if (value === "") setCaret(0);
-  }, [value]);
-
-  const focusAtEnd = () => {
-    const input = inputRef.current;
-    if (!input || disabled) return;
-    input.focus({ preventScroll: true });
-    const end = input.value.length;
-    input.setSelectionRange(end, end);
-    setCaret(end);
-  };
-
-  const letters = Array.from(value);
-  const nodes: React.ReactNode[] = [];
-
-  letters.forEach((letter, index) => {
-    if (index === caret) nodes.push(<span key={`caret-${index}`} className="caret" aria-hidden="true" />);
-    // A plain inline span keeps normal text flow (words wrap at spaces, not
-    // between letters) — that is what typing surfaces in this genre look like.
-    nodes.push(
-      <span key={index} className="ch" aria-hidden="true">
-        {letter}
-      </span>,
-    );
-  });
-
-  if (caret >= letters.length) {
-    nodes.push(<span key="caret-end" className="caret" aria-hidden="true" />);
-  }
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, [resize]);
 
   return (
     <div
       className={`typearea ${focused ? "is-focused" : ""} ${disabled ? "is-disabled" : ""}`}
-      onClick={focusAtEnd}
+      onMouseDown={(event) => {
+        // Clicks on the padding around the text only focus the field; clicks on
+        // the text keep the browser's native caret placement.
+        if (event.target === innerRef.current) return;
+        event.preventDefault();
+        innerRef.current?.focus();
+      }}
     >
-      <input
-        ref={inputRef}
+      <textarea
+        ref={assignRef}
         className="typearea-input"
         value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-          setCaret(event.target.selectionStart ?? event.target.value.length);
-        }}
-        onSelect={(event) => {
-          const target = event.target as HTMLInputElement;
-          setCaret(target.selectionStart ?? target.value.length);
+        rows={1}
+        onChange={(event) => onChange(event.target.value.replace(/\r?\n/g, " "))}
+        onKeyDown={(event) => {
+          // One sentence, one line: Enter always submits, never inserts a break.
+          if (event.key !== "Enter") return;
+          if (event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          onSubmit?.();
         }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
+        placeholder={placeholder}
         disabled={disabled}
         autoComplete="off"
         autoCorrect="off"
@@ -77,14 +78,6 @@ export function TypeArea({ value, onChange, inputRef, placeholder, disabled }: P
         spellCheck={false}
         aria-label="输入你听到的句子"
       />
-
-      <div className="typearea-display">
-        {value === "" ? (
-          <span className="typearea-placeholder">{placeholder}</span>
-        ) : (
-          nodes
-        )}
-      </div>
     </div>
   );
 }

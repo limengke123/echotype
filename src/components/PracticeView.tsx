@@ -24,7 +24,7 @@ export function PracticeView({ sentences, settings, onFinish, onExit, onOpenSett
   apiRef.current = dictation;
 
   const spokenKeyRef = useRef<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const finishedRef = useRef(false);
 
   const { current, phase, index, queue, plays, hintLevel, input, review } = dictation;
@@ -235,6 +235,7 @@ export function PracticeView({ sentences, settings, onFinish, onExit, onOpenSett
             onChange={dictation.setInput}
             inputRef={inputRef}
             placeholder="听到什么就写什么…"
+            onSubmit={handleSubmit}
           />
 
           <div className="answer-actions">
